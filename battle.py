@@ -131,12 +131,12 @@ class UnassignedVars:
     def __init__(self, select_criteria, csp):
         if select_criteria not in ['random', 'fixed', 'mrv']:
             pass #print "Error UnassignedVars given an illegal selection criteria {}. Must be one of 'random', 'stack', 'queue', or 'mrv'".format(select_criteria)
-        unassignedL = []
-        for var in csp.variables():
-            if var._value == None:
-                unassignedL.append(var)
-        self.unassigned = unassignedL
-        # self.unassigned = list(csp.variables())
+        # unassignedL = []
+        # for var in csp.variables():
+        #     if var._value == None:
+        #         unassignedL.append(var)
+        # self.unassigned = unassignedL
+        self.unassigned = list(csp.variables())
         self.csp = csp
         self._select = select_criteria
         if select_criteria == 'fixed':
@@ -482,7 +482,7 @@ class CSP:
     #             return False
     #     return True
 
-def BT(unAssignedVars, csp, allSolutions, trace, filename):
+def BT2(unAssignedVars, csp, allSolutions, trace, filename):
     for var in unAssignedVars.unassigned:
             print([var._name[-1]])
     if unAssignedVars.empty():
@@ -516,6 +516,54 @@ def BT(unAssignedVars, csp, allSolutions, trace, filename):
     print("No Solution!")
     return
 
+
+def BT(unAssignedVars, csp, allSolutions, trace, filename):
+    '''Backtracking Search. unAssignedVars is the current set of
+       unassigned variables.  csp is the csp problem, allSolutions is
+       True if you want all solutionss trace if you want some tracing
+       of variable assignments tried and constraints failed. Returns
+       the set of solutions found.
+
+      To handle finding 'allSolutions', at every stage we collect
+      up the solutions returned by the recursive  calls, and
+      then return a list of all of them.
+
+      If we are only looking for one solution we stop trying
+      further values of the variable currently being tried as
+      soon as one of the recursive calls returns some solutions.
+    '''
+    if unAssignedVars.empty():
+        if trace: pass #print "{} Solution Found".format(csp.name())
+        soln = []
+        for v in csp.variables():
+            soln.append((v, v.getValue()))
+        output_to_file(filename, soln)
+        return [soln]  #each call returns a list of solutions found
+    bt_search.nodesExplored += 1
+    solns = []         #so far we have no solutions recursive calls
+    nxtvar = unAssignedVars.extract()
+    if trace: pass #print "==>Trying {}".format(nxtvar.name())
+    for val in nxtvar.domain():
+        if trace: pass #print "==> {} = {}".format(nxtvar.name(), val)
+        nxtvar.setValue(val)
+        constraintsOK = True
+        for cnstr in csp.constraintsOf(nxtvar):
+            if cnstr.numUnassigned() == 0:
+                if not cnstr.check():
+                    constraintsOK = False
+                    if trace: pass #print "<==falsified constraint\n"
+                    break
+        if constraintsOK:
+            new_solns = BT(unAssignedVars, csp, allSolutions, trace, filename)
+            if new_solns:
+                solns.extend(new_solns)
+            if len(solns) > 0 and not allSolutions:
+                break  #don't bother with other values of nxtvar
+                       #as we found a soln.
+    nxtvar.unAssign()
+    unAssignedVars.insert(nxtvar)
+    return solns
+
 def bt_search(algo, csp, variableHeuristic, allSolutions, trace, filename):
     '''Main interface routine for calling different forms of backtracking search
        algorithm is one of ['BT', 'FC', 'GAC']
@@ -535,16 +583,18 @@ def bt_search(algo, csp, variableHeuristic, allSolutions, trace, filename):
     bt_search.nodesExplored = 0
 
     if variableHeuristic not in varHeuristics:
-        pass #print "Error. Unknown variable heursitics {}. Must be one of {}.".format(variableHeuristic, varHeuristics)
+        pass #print "Error. Unknown variable heursitics {}. Must be one of {}.".format(
+            #variableHeuristic, varHeuristics)
     if algo not in algorithms:
-        pass #print "Error. Unknown algorithm heursitics {}. Must be one of {}.".format(algo, algorithms)
+        pass #print "Error. Unknown algorithm heursitics {}. Must be one of {}.".format(
+            #algo, algorithms)
 
     uv = UnassignedVars(variableHeuristic,csp)
     Variable.clearUndoDict()
-    # for v in csp.variables():
-    #     v.reset()
+    for v in csp.variables():
+        v.reset()
     if algo == 'BT':
-        solutions = BT(uv, csp, allSolutions, trace, filename)
+         solutions = BT(uv, csp, allSolutions, trace, filename)
     # elif algo == 'FC':
     #     for cnstr in csp.constraints():
     #         if cnstr.arity() == 1:
@@ -555,32 +605,6 @@ def bt_search(algo, csp, variableHeuristic, allSolutions, trace, filename):
     #     solutions = GAC(uv, csp, allSolutions, trace)
 
     return solutions, bt_search.nodesExplored
-
-
-
-# def backtrack(assignment, csp):
-#     # return csp.isComplete(assignment)
-#     if csp.isComplete(assignment):
-#         return assignment
-#     var = csp.select_unassigned_variable(assignment)
-#     for value in csp.order_domain_value(var, assignment):
-#         assignment.append((var, value))
-#         print(assignment)
-#         # If assignment does not violate any constraint
-#         # print([var._name for (var, val) in assignment])
-#         if (len(csp.check(assignment)) == 0):
-#             print("yes")
-#             result = backtrack(assignment, csp)
-#             if result != None:
-#                 return result
-#         print("yes1")
-#         assignment.remove((var, value))
-#         # print(assignment)
-#     return None
-
-# def backtracking_search(csp):
-#     # return backtrack([], csp)
-#     return BT(UnassignedVars("fixed", csp), csp)
 
 def read_from_file(filename):
     """
@@ -614,9 +638,10 @@ def read_from_file(filename):
                         # print(line_index-3, x)
                     if ch == '0':
                         var = Variable(string, [".", "S"])
+                    elif ch == ".":
+                        var = Variable(string, ["."])
                     else:
-                        var = Variable(string, [])
-                        var._value = "S"
+                        var = Variable(string, ["S"])
                     pieces.append(var)
                     each_row_pieces.append(var)
                     # elif ch == 'S': # found submarine
@@ -646,19 +671,19 @@ def row_col_pieces(row_pieces):
     # print(np.array(names))
     return col_pieces
 
-def output_to_file(filename, csp):
+def output_to_file(filename, sol):
     with open(filename,'r+') as file:
         file.truncate(0)
     f = open(filename, "a")
     # f.write("\n\nExploring:\n")
     rows = []
     count = 0
-    for var in csp._variables:
+    for (var,val) in sol:
         if count == 6:
             count = 0
             f.write("\n")
             
-        f.write(var._value) # ends with a new line
+        f.write(val) # ends with a new line
         # f.write("\n")
         count += 1
     f.write("\n")
