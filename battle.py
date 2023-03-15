@@ -312,8 +312,10 @@ class CSP:
                 print("Error: variable {} appears in constraint but specified as one of the variables of the CSP {}".format(v.name(), self.name()))
 
         self.constraints_of = [[] for i in range(len(variables))]
+        print([var._name[-1] for var in variables] )
         for c in constraints:
             for v in c.scope():
+                print(v._name)
                 i = variables.index(v)
                 self.constraints_of[i].append(c)
 
@@ -419,9 +421,9 @@ def read_from_file(filename):
     row_pieces = []
     for line in puzzle_file:
         if (line_index == 0):
-                col_constraint = line[:-1]
-        elif (line_index == 1):
                 row_constraint = line[:-1]
+        elif (line_index == 1):
+                col_constraint = line[:-1]
         elif (line_index == 2):
                 piece_constraint = line[:-1]
         else: 
@@ -429,14 +431,17 @@ def read_from_file(filename):
             for x, ch in enumerate(line):
                 if ch != '\n':
                     string = "row: %d, col: %d, piece: %s"%(line_index-3,x,ch)
-                    each_row_pieces.append(Variable(string, [".", "S", "<", ">", "M"]))
-                    if ch == '0': # found unknown piece
+                    # each_row_pieces.append(Variable(string, ["0", ".", "S", "<", ">", "^", "v", "M"]))
+                    if ch == '0' or ch == 'S' or ch == '.': # found unknown piece
                         # print(line_index-3, x)
-                        pieces.append(Variable(string, [".", "S", "<", ">", "M"]))
-                    elif ch == 'S': # found submarine
-                        pieces.append(Variable(string, [".", "S", "<", ">", "M"]))
-                    elif ch == '.': # found water
-                        pieces.append(Variable(string, [".", "S", "<", ">", "M"]))
+                        var = Variable(string, ["0",".", "S", "<", ">", "^", "v", "M"])
+                        pieces.append(var)
+                        each_row_pieces.append(var)
+                    # elif ch == 'S': # found submarine
+                    #     pieces.append(Variable(string, ["0",".", "S", "<", ">", "^", "v", "M"]))
+                    # elif ch == '.': # found water
+                    #     pieces.append(Variable(string, ["0",".", "S", "<", ">", "^", "v", "M"]))
+
             row_pieces.append(each_row_pieces)
         line_index += 1
     # for p in pieces:
@@ -479,6 +484,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     variables, row_pieces, row_constraint, col_constraint, piece_constraint = read_from_file(args.inputfile)
+    print([var._name[-1] for var in variables] )
     # print(row_pieces)
     col_pieces = row_col_pieces(row_pieces)
     # print(col_pieces)
@@ -486,12 +492,12 @@ if __name__ == "__main__":
     # Create column constraints
     for i in range(len(row_constraint)):
         ch = row_constraint[i]
-        # print(ch,[var._name[-1] for var in row_pieces[i]] )
-        all_constrains.append(NValuesConstraint('row_constraint idx: %d'%i, row_pieces[i], ["S", "<", ">", "M"], int(ch), int(ch)))
-    for i in range(len(col_constraint)):
-        ch = col_constraint[i]
-        # print(ch,[var._name[-1] for var in col_pieces[i]] )
-        all_constrains.append(NValuesConstraint('col_constraint idx: %d'%i, col_pieces[i], ["S", "<", ">", "M"], int(ch), int(ch)))
+        print(ch,[var._name[-1] for var in row_pieces[i]] )
+        all_constrains.append(NValuesConstraint('row_constraint idx: %d'%i, row_pieces[i], ["S", "<", ">", "^", "v", "M"], int(ch), int(ch)))
+    # for i in range(len(col_constraint)):
+    #     ch = col_constraint[i]
+    #     # print(ch,[var._name[-1] for var in col_pieces[i]] )
+    #     all_constrains.append(NValuesConstraint('col_constraint idx: %d'%i, col_pieces[i], ["S", "<", ">", "^", "v", "M"], int(ch), int(ch)))
     csp = CSP("test", variables, all_constrains)
 
     # backtracking_search(csp)
