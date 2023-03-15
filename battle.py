@@ -1,5 +1,7 @@
 import argparse
 import numpy as np
+import math
+import random
 class Variable:
     '''Class for defining CSP variables.
 
@@ -112,6 +114,61 @@ class Variable:
             for (var,val) in Variable.undoDict[dkey]:
                 var.restoreVal(val)
             del Variable.undoDict[dkey]
+
+class UnassignedVars:
+    '''class for holding the unassigned variables of a CSP. We can extract
+       from, re-initialize it, and return variables to it.  Object is
+       initialized by passing a select_criteria (to determine the
+       order variables are extracted) and the CSP object.
+
+       select_criteria = ['random', 'fixed', 'mrv'] with
+       'random' == select a random unassigned variable
+       'fixed'  == follow the ordering of the CSP variables (i.e.,
+                   csp.variables()[0] before csp.variables()[1]
+       'mrv'    == select the variable with minimum values in its current domain
+                   break ties by the ordering in the CSP variables.
+    '''
+    def __init__(self, select_criteria, csp):
+        if select_criteria not in ['random', 'fixed', 'mrv']:
+            pass #print "Error UnassignedVars given an illegal selection criteria {}. Must be one of 'random', 'stack', 'queue', or 'mrv'".format(select_criteria)
+        unassignedL = []
+        for var in csp.variables():
+            if var._value == None:
+                unassignedL.append(var)
+        self.unassigned = unassignedL
+        # self.unassigned = list(csp.variables())
+        self.csp = csp
+        self._select = select_criteria
+        if select_criteria == 'fixed':
+            #reverse unassigned list so that we can add and extract from the back
+            self.unassigned.reverse()
+
+    def extract(self):
+        if not self.unassigned:
+            print( "Warning, extracting from empty unassigned list")
+            return None
+        if self._select == 'random':
+            i = random.randint(0,len(self.unassigned)-1)
+            nxtvar = self.unassigned[i]
+            self.unassigned[i] = self.unassigned[-1]
+            self.unassigned.pop()
+            return nxtvar
+        if self._select == 'fixed':
+            return self.unassigned.pop()
+        if self._select == 'mrv':
+            nxtvar = min(self.unassigned, key=lambda v: v.curDomainSize())
+            self.unassigned.remove(nxtvar)
+            return nxtvar
+
+    def empty(self):
+        return len(self.unassigned) == 0
+
+    def insert(self, var):
+        if not var in self.csp.variables():
+            pass #print "Error, trying to insert variable {} in unassigned that is not in the CSP problem".format(var.name())
+        else:
+            self.unassigned.append(var)
+
 #implement various types of constraints
 class Constraint:
     '''Base class for defining constraints. Each constraint can check if
@@ -236,7 +293,10 @@ class NValuesConstraint(Constraint):
         self._ub = upper_bound
 
     def check(self):
-        print(self.scope())
+        """if among all variables that are assigned, whether the amount in set is within the range
+        If no variables are assigned, then return True, since no rule is violated yet
+        """
+        # print(self.scope())
         assignments = []
         for v in self.scope():
             if v.isAssigned():
@@ -245,13 +305,13 @@ class NValuesConstraint(Constraint):
                 return True
         rv_count = 0
 
-        print("Checking {} with assignments = {}".format(self.name(), assignments))
+        # print("Checking {} with assignments = {}".format(self.name(), assignments))
 
         for v in assignments:
             if v in self._required:
                 rv_count += 1
 
-        print("rv_count = {} test = {}".format(rv_count, self._lb <= rv_count and self._ub >= rv_count))
+        # print("rv_count = {} test = {}".format(rv_count, self._lb <= rv_count and self._ub >= rv_count))
 
 
         return self._lb <= rv_count and self._ub >= rv_count
@@ -296,8 +356,8 @@ class CSP:
         '''create a CSP problem object passing it a name, a list of
            variable objects, and a list of constraint objects'''
         self._name = name
-        self._variables = variables
-        self._constraints = constraints
+        self._variables = variables # eg. [ 36 Variable objects]
+        self._constraints = constraints # eg. [Constraint objects...]
 
         #some sanity checks
         varsInCnst = set()
@@ -312,10 +372,10 @@ class CSP:
                 print("Error: variable {} appears in constraint but specified as one of the variables of the CSP {}".format(v.name(), self.name()))
 
         self.constraints_of = [[] for i in range(len(variables))]
-        print([var._name[-1] for var in variables] )
+        # print([var._name[-1] for var in variables] )
         for c in constraints:
             for v in c.scope():
-                print(v._name)
+                # print(v._name)
                 i = variables.index(v)
                 self.constraints_of[i].append(c)
 
@@ -350,59 +410,177 @@ class CSP:
         current_values = [(var, var.getValue()) for var in self.variables()]
         errs = []
 
-        for s in solutions:
-            s_vars = [var for (var, val) in s]
+        # for s in solutions:
+        s = solutions
+        s_vars = [var for (var, val) in s]
 
-            if len(s_vars) != len(self.variables()):
-                errs.append([s, "Solution has incorrect number of variables in it"])
-                continue
+        if len(s_vars) != len(self.variables()):
+            errs.append([s, "Solution has incorrect number of variables in it"])
+            # continue
 
-            if len(set(s_vars)) != len(self.variables()):
-                errs.append([s, "Solution has duplicate variable assignments"])
-                continue
+        elif len(set(s_vars)) != len(self.variables()):
+            errs.append([s, "Solution has duplicate variable assignments"])
+            # continue
 
-            if set(s_vars) != set(self.variables()):
-                errs.append([s, "Solution has incorrect variable in it"])
-                continue
+        elif set(s_vars) != set(self.variables()):
+            errs.append([s, "Solution has incorrect variable in it"])
+            # continue
 
-            for (var, val) in s:
-                var.setValue(val)
+        for (var, val) in s:
+            var.setValue(val)
 
-            for c in self.constraints():
-                if not c.check():
-                    errs.append([s, "Solution does not satisfy constraint {}".format(c.name())])
-                    break
+        for c in self.constraints():
+            if not c.check():
+                errs.append([s, "Solution does not satisfy constraint {}".format(c.name())])
+                break
 
         for (var, val) in current_values:
             var.setValue(val)
 
         return errs
     
-    def isComplete(self):
-        return
+    def isComplete(self, assignment):
+        """whether every var gets a value yet"""
+        return len(self._variables) == len(assignment)
     
-    def select_unassigned_variable(self):
-        return
-    
-    def order_domain_value(self):
+    def select_unassigned_variable(self, assignment):
+        """
+        
+        """
+        """ for forward checking pruning
+        remaining_val = math.inf
+        for var in self._variables:
+            assigned_dom = 0
+            for val in var._dom:
+                if (var.getValue() == val):
+                    assigned_dom += 1
+            unassigned_dom = len(var._dom) - assigned_dom
+            if unassigned_dom < remaining_val:
+                remaining_val = unassigned_dom
+                selected_var = var
+        return selected_var
+        """
+        assigned_var = []
+        for (var, val) in assignment:
+            assigned_var.append(var)
+        for v in self._variables:
+            if v not in assigned_var:
+                return v
+        print("no successor")
         return 
+    def order_domain_value(self, var, assignment):
+        """Least-Constraining-Value Heuristic"""
+        vals = []
+        for val in var._dom:
+            vals.append(val)
+        print("vals", vals)
+        return vals
+    
+    # def allSolutions(self):
+    #     for var in self._variables:
+    #         if (var.isAssigned() == False):
+    #             return False
+    #     return True
 
-def backtrack(assignment, csp):
-    if csp.isComplete(assignment):
-        return assignment
-    var = csp.select_unassigned_variable()
-    for value in csp.order_domain_value(var, assignment):
-        assignment.append((var, value))
-        # If assignment does not violate any constraint
-        if (len(csp.check(assignment)) == 0):
-            result = backtrack(assignment, csp)
-            if result != None:
-                return result
-        assignment.remove((var, value))
-    return None
+def BT(unAssignedVars, csp, allSolutions, trace, filename):
+    for var in unAssignedVars.unassigned:
+            print([var._name[-1]])
+    if unAssignedVars.empty():
+        for var in csp._variables:
+            print(var._name, "=", var._value)
+        if allSolutions:
+            print("Solution found!")
+            output_to_file(filename, csp)
+            return
+        else:
+            # print("Solution found!")
+            return
+    print("len:", len(unAssignedVars.unassigned))
+    var = unAssignedVars.extract()
+    for val in var._dom:
+        # for var in csp._variable:
+        #     print([var._name[-1]])
+        var.setValue(val)
+        constrainsOK = True
+        for constraint in csp.constraintsOf(var):
+            if constraint.numUnassigned() == 0:
+                if not constraint.check():
+                    constrainsOK = False
+                    break
+        if constrainsOK:
+            BT(unAssignedVars, csp,  allSolutions, trace, filename)
+    if var._name == "row: 0, col: 5, piece: 0":
+        print("NO")
+        var.setValue(None)
+    unAssignedVars.insert(var)
+    print("No Solution!")
+    return
 
-def backtracking_search(csp):
-    return backtrack([], csp)
+def bt_search(algo, csp, variableHeuristic, allSolutions, trace, filename):
+    '''Main interface routine for calling different forms of backtracking search
+       algorithm is one of ['BT', 'FC', 'GAC']
+       csp is a CSP object specifying the csp problem to solve
+       variableHeuristic is one of ['random', 'fixed', 'mrv']
+       allSolutions True or False. True means we want to find all solutions.
+       trace True of False. True means turn on tracing of the algorithm
+
+       bt_search returns a list of solutions. Each solution is itself a list
+       of pairs (var, value). Where var is a Variable object, and value is
+       a value from its domain.
+    '''
+    varHeuristics = ['random', 'fixed', 'mrv']
+    algorithms = ['BT', 'FC', 'GAC']
+
+    #statistics
+    bt_search.nodesExplored = 0
+
+    if variableHeuristic not in varHeuristics:
+        pass #print "Error. Unknown variable heursitics {}. Must be one of {}.".format(variableHeuristic, varHeuristics)
+    if algo not in algorithms:
+        pass #print "Error. Unknown algorithm heursitics {}. Must be one of {}.".format(algo, algorithms)
+
+    uv = UnassignedVars(variableHeuristic,csp)
+    Variable.clearUndoDict()
+    # for v in csp.variables():
+    #     v.reset()
+    if algo == 'BT':
+        solutions = BT(uv, csp, allSolutions, trace, filename)
+    # elif algo == 'FC':
+    #     for cnstr in csp.constraints():
+    #         if cnstr.arity() == 1:
+    #             FCCheck(cnstr, None, None)  #FC with unary constraints at the root
+    #     solutions = FC(uv, csp, allSolutions, trace)
+    # elif algo == 'GAC':
+    #     GacEnforce(csp.constraints(), csp, None, None) #GAC at the root
+    #     solutions = GAC(uv, csp, allSolutions, trace)
+
+    return solutions, bt_search.nodesExplored
+
+
+
+# def backtrack(assignment, csp):
+#     # return csp.isComplete(assignment)
+#     if csp.isComplete(assignment):
+#         return assignment
+#     var = csp.select_unassigned_variable(assignment)
+#     for value in csp.order_domain_value(var, assignment):
+#         assignment.append((var, value))
+#         print(assignment)
+#         # If assignment does not violate any constraint
+#         # print([var._name for (var, val) in assignment])
+#         if (len(csp.check(assignment)) == 0):
+#             print("yes")
+#             result = backtrack(assignment, csp)
+#             if result != None:
+#                 return result
+#         print("yes1")
+#         assignment.remove((var, value))
+#         # print(assignment)
+#     return None
+
+# def backtracking_search(csp):
+#     # return backtrack([], csp)
+#     return BT(UnassignedVars("fixed", csp), csp)
 
 def read_from_file(filename):
     """
@@ -432,11 +610,15 @@ def read_from_file(filename):
                 if ch != '\n':
                     string = "row: %d, col: %d, piece: %s"%(line_index-3,x,ch)
                     # each_row_pieces.append(Variable(string, ["0", ".", "S", "<", ">", "^", "v", "M"]))
-                    if ch == '0' or ch == 'S' or ch == '.': # found unknown piece
+                    # if ch == '0' or ch == 'S' or ch == '.': # found unknown piece
                         # print(line_index-3, x)
-                        var = Variable(string, ["0",".", "S", "<", ">", "^", "v", "M"])
-                        pieces.append(var)
-                        each_row_pieces.append(var)
+                    if ch == '0':
+                        var = Variable(string, [".", "S"])
+                    else:
+                        var = Variable(string, [])
+                        var._value = "S"
+                    pieces.append(var)
+                    each_row_pieces.append(var)
                     # elif ch == 'S': # found submarine
                     #     pieces.append(Variable(string, ["0",".", "S", "<", ">", "^", "v", "M"]))
                     # elif ch == '.': # found water
@@ -452,7 +634,7 @@ def read_from_file(filename):
 def row_col_pieces(row_pieces):
     col_pieces = []
     
-    a = np.array(row_pieces)
+    a = np.array(row_pieces, dtype=object)
     col_pieces = a.transpose()
 
     # names = []
@@ -464,7 +646,23 @@ def row_col_pieces(row_pieces):
     # print(np.array(names))
     return col_pieces
 
-
+def output_to_file(filename, csp):
+    with open(filename,'r+') as file:
+        file.truncate(0)
+    f = open(filename, "a")
+    # f.write("\n\nExploring:\n")
+    rows = []
+    count = 0
+    for var in csp._variables:
+        if count == 6:
+            count = 0
+            f.write("\n")
+            
+        f.write(var._value) # ends with a new line
+        # f.write("\n")
+        count += 1
+    f.write("\n")
+    f.close()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -484,7 +682,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     variables, row_pieces, row_constraint, col_constraint, piece_constraint = read_from_file(args.inputfile)
-    print([var._name[-1] for var in variables] )
+    # print([var._name[-1] for var in variables] )
     # print(row_pieces)
     col_pieces = row_col_pieces(row_pieces)
     # print(col_pieces)
@@ -492,12 +690,19 @@ if __name__ == "__main__":
     # Create column constraints
     for i in range(len(row_constraint)):
         ch = row_constraint[i]
-        print(ch,[var._name[-1] for var in row_pieces[i]] )
-        all_constrains.append(NValuesConstraint('row_constraint idx: %d'%i, row_pieces[i], ["S", "<", ">", "^", "v", "M"], int(ch), int(ch)))
-    # for i in range(len(col_constraint)):
-    #     ch = col_constraint[i]
-    #     # print(ch,[var._name[-1] for var in col_pieces[i]] )
-    #     all_constrains.append(NValuesConstraint('col_constraint idx: %d'%i, col_pieces[i], ["S", "<", ">", "^", "v", "M"], int(ch), int(ch)))
+        # print(ch,[var._name[-1] for var in row_pieces[i]] )
+        all_constrains.append(NValuesConstraint('row_constraint idx: %d'%i, row_pieces[i], ["S"], int(ch), int(ch))) # "<", ">", "^", "v", "M"
+    for i in range(len(col_constraint)):
+        ch = col_constraint[i]
+        # print(ch,[var._name[-1] for var in col_pieces[i]] )
+        all_constrains.append(NValuesConstraint('col_constraint idx: %d'%i, col_pieces[i], ["S"], int(ch), int(ch)))
     csp = CSP("test", variables, all_constrains)
 
-    # backtracking_search(csp)
+    result = bt_search("BT", csp, "fixed", allSolutions=True, trace=True, filename=args.outputfile)
+    print(result)
+
+    # c1 = all_constrains[0]
+    # print(c1._name)
+    # v = c1.scope()[0]
+    # l = c1.hasSupport(v, "S")
+    # print(l)
