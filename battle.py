@@ -544,14 +544,14 @@ def bt_search(algo, csp, variableHeuristic, allSolutions, trace, piece_constrain
         v.reset()
     if algo == 'BT':
          solutions = BT(uv, csp, allSolutions, trace, piece_constraint)
-    elif algo == 'FC':
-        for cnstr in csp.constraints():
-            if cnstr.arity() == 1:
-                FCCheck(cnstr, None, None)  #FC with unary constraints at the root
-        solutions = FC(uv, csp, allSolutions, trace)
+    # elif algo == 'FC':
+    #     for cnstr in csp.constraints():
+    #         if cnstr.arity() == 1:
+    #             FCCheck(cnstr, None, None)  #FC with unary constraints at the root
+    #     solutions = FC(uv, csp, allSolutions, trace)
     elif algo == 'GAC':
         GacEnforce(csp.constraints(), csp, None, None) #GAC at the root
-        solutions = GAC(uv, csp, allSolutions, trace)
+        solutions = GAC(uv, csp)
 
     return solutions, bt_search.nodesExplored
 
@@ -611,6 +611,61 @@ def BT(unAssignedVars, csp, allSolutions, trace, piece_constraint):
     nxtvar.unAssign()
     unAssignedVars.insert(nxtvar)
     return solns
+# i = 0
+def GacEnforce(cnstrs, csp, assignedvar, assignedval):
+    cnstrs = csp.constraints()
+    while len(cnstrs) != 0:
+        cnstr = cnstrs.pop()
+        for var in cnstr.scope():
+            for val in var.curDomain():
+                if not cnstr.hasSupport(var,val):
+                    var.pruneValue(val,assignedvar,assignedval)
+                    if var.curDomainSize() == 0:
+                        return "DWO"
+                    for recheck in csp.constraintsOf(var):
+                        if recheck != cnstr and recheck not in cnstrs:
+                            cnstrs.append(recheck)
+    return "OK"
+    
+def GAC(unAssignedVars,csp):
+    # global i
+    # print(i)
+    # i+=1
+    if unAssignedVars.empty():
+        # if trace:pass
+        soln = []
+        i=0
+        for var in csp.variables():
+            i += 1
+            if int(var._name) > 0:
+                soln.append((var,var.getValue()))
+        return [soln]
+    bt_search.nodesExplored += 1
+    solns = []
+    nxtvar = unAssignedVars.extract()
+    # if trace:pass
+    for val in nxtvar.curDomain():
+        # if trace:pass
+        nxtvar.setValue(val)
+        noDWO = True
+        if GacEnforce(csp.constraintsOf(nxtvar), csp, nxtvar, val) == "DWO":
+            noDWO = False
+        # try printing the board
+        if noDWO:
+            new_solns = GAC(unAssignedVars, csp)
+            if new_solns:
+                four, three, two, one, s_ = count_ship_numbers(new_solns[0], size)
+                # new_solns = [dict_to_sol(dict)]
+                # print(one, piece_constraint[0], two, piece_constraint[1], three, piece_constraint[2], four, piece_constraint[3])
+                if one == int(piece_constraint[0]) and two == int(piece_constraint[1]) and three == int(piece_constraint[2]) and four == int(piece_constraint[3]):
+                    print("Solution Found")
+                    solns.extend(new_solns)
+                    if len(solns) > 0:
+                        break
+        nxtvar.restoreValues(nxtvar,val)
+    nxtvar.unAssign()
+    unAssignedVars.insert(nxtvar)
+    return solns
 
 def dict_to_sol(s_):
     res = []
@@ -620,6 +675,8 @@ def dict_to_sol(s_):
 
 def output_to_file(filename, sol, size):
     f = open(filename, "a")
+    # f.seek(0)
+    f.truncate()
 
     s_ = {}
     for (var, val) in sol:
@@ -664,7 +721,7 @@ def output_to_file(filename, sol, size):
             f.write(s_[(i*size+j)])
         if i != (size-2):
             f.write("\n")
-    # f.write("\n")
+    f.write("\n")
     f.close()
 
 def print_solution(s, size):
@@ -687,37 +744,42 @@ def count_ship_numbers(solution, size):
         s_[int(var.name())] = val
     for i in range(1, size-1):
         for j in range(1, size-1):
+            # if (i == 5 and j == 4 and s_[(i*size+j)] == 1):
+            #     print(bt_search.nodesExplored)
             # SSSS
-            if j < (size - 3) and s_[(i*size+j)] == "S" and s_[(i*size+j+1)] == "S" and s_[(i*size+j+2)] == "S" and s_[(i*size+j+3)] == "S":
-                four += 1
-                s_[(i*size+j)] = "<"
-                s_[(i*size+j+1 )] ="M"
-                s_[(i*size+j+2 )] ="M"
-                s_[(i*size+j+3 )] =">"
-            elif j < (size - 2) and s_[(i*size+j)] == "S" and s_[(i*size+j+1)] == "S" and s_[(i*size+j+2)] == "S":
-                three += 1
-                s_[(i*size+j)] = "<"
-                s_[(i*size+j+1)] = "M"
-                s_[(i*size+j+1)] = ">"
-            elif j < (size - 1) and s_[(i*size+j)] == "S" and s_[(i*size+j+1)] == "S":
-                two += 1
-                s_[(i*size+j)] = "<"
-                s_[(i*size+j+1)] = ">"
-            if i < (size - 3) and s_[(i*size+j)] == "S" and s_[((i+1)*size+j)] == "S" and s_[((i+2)*size+j)] == "S" and s_[((i+3)*size+j)] == "S":
+            if (i < (size - 4) and s_[(i*size+j)] == "S" and s_[((i+1)*size+j)] == "S" and s_[((i+2)*size+j)] == "S" and s_[((i+3)*size+j)] == "S"):
                 four += 1
                 s_[((i)*size+j)] = "^"
                 s_[((i+1)*size+j)] = "M"
                 s_[((i+2)*size+j)] = "M"
                 s_[((i+3)*size+j)] = "v"
-            elif i < (size - 2) and s_[(i*size+j)] == "S" and s_[((i+1)*size+j)] == "S" and s_[((i+2)*size+j)] == "S":
+            elif (i < (size - 3) and s_[(i*size+j)] == "S" and s_[((i+1)*size+j)] == "S" and s_[((i+2)*size+j)] == "S"):
                 three += 1
                 s_[((i)*size+j)] = "^"
                 s_[((i+1)*size+j)]= "M"
                 s_[((i+2)*size+j)] = "v"
-            elif i < (size - 1) and s_[(i*size+j)] == "S" and s_[((i+1)*size+j)] == "S":
+            elif (i < (size - 2) and s_[(i*size+j)] == "S" and s_[((i+1)*size+j)] == "S"):
+                # if (i == 5 and j == 4):
+                    # print(bt_search.nodesExplored)
                 two += 1
                 s_[((i)*size+j)] = "^"
                 s_[((i+1)*size+j)] = "v"
+            if (j < (size - 4) and s_[(i*size+j)] == "S" and s_[(i*size+j+1)] == "S" and s_[(i*size+j+2)] == "S" and s_[(i*size+j+3)] == "S"):
+                four += 1
+                s_[(i*size+j)] = "<"
+                s_[(i*size+j+1 )] ="M"
+                s_[(i*size+j+2 )] ="M"
+                s_[(i*size+j+3 )] =">"
+            elif (j < (size - 3) and s_[(i*size+j)] == "S" and s_[(i*size+j+1)] == "S" and s_[(i*size+j+2)] == "S"):
+                three += 1
+                s_[(i*size+j)] = "<"
+                s_[(i*size+j+1)] = "M"
+                s_[(i*size+j+2)] = ">"
+            elif (j < (size - 2) and s_[(i*size+j)] == "S" and s_[(i*size+j+1)] == "S"):
+                two += 1
+                s_[(i*size+j)] = "<"
+                s_[(i*size+j+1)] = ">"
+            
     for i in range(1, size-1):
         for j in range(1, size-1):
             if s_[(i*size+j)] == "S":
@@ -742,8 +804,9 @@ if __name__ == "__main__":
     
     # args = parser.parse_args()
     
-    inputfile = "puzzle1.txt"
-    outputfile = "solution1.txt"
+    # inputfile = "/Users/yuchunfeng/Documents/CSC384/puzzle1.txt"
+    inputfile = "/Users/yuchunfeng/Documents/CSC384/A3/input_easy1.txt"
+    outputfile = "/Users/yuchunfeng/Documents/CSC384/A3/solution999.txt"
     #parse board and ships info
     file = open(inputfile, 'r')
     b = file.read()
@@ -792,14 +855,13 @@ if __name__ == "__main__":
     row_constraint = []
     for i in board.split()[0]:
         row_constraint += [int(i)]
-
     for row in range(0,size):
         conslist.append(NValuesConstraint('row', [varn[str(-1-(row*size+col))] for col in range(0,size)], [1], row_constraint[row], row_constraint[row]))
 
     col_constraint = []
     for i in board.split()[1]:
         col_constraint += [int(i)]
-
+    print(col_constraint)
     for col in range(0,size):
         conslist.append(NValuesConstraint('col', [varn[str(-1-(col+row*size))] for row in range(0,size)], [1], col_constraint[col], col_constraint[col]))
 
@@ -817,7 +879,7 @@ if __name__ == "__main__":
         for j in range(0, size):
             v = Variable(str(i*size+j), ['.', 'S', '<', '^', 'v', 'M', '>'])
             varlist.append(v)
-            varn[str(str(i*size+j))] = v
+            varn[str(i*size+j)] = v
             # connect 1/0 variables to W/S/L/R/B/T/M variables
             # make positive pieces ship part when 1, not ship part when 0
             conslist.append(TableConstraint('connect', [varn[str(-1-(i*size+j))], varn[str(i*size+j)]], [[0,'.'],[1,'S'],[1,'<'],[1,'^'],[1,'v'],[1,'M'],[1,'>']]))
