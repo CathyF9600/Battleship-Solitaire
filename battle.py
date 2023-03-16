@@ -1,6 +1,6 @@
 import sys
 import time
-
+import random
 import argparse
 
 class Variable:
@@ -513,7 +513,7 @@ class UnassignedVars:
         else:
             self.unassigned.append(var)
 
-def bt_search(algo, csp, variableHeuristic, allSolutions, trace, piece_constraint):
+def bt_search(algo, csp, variableHeuristic, allSolutions, trace, piece_constraint, originalB):
     '''Main interface routine for calling different forms of backtracking search
        algorithm is one of ['BT', 'FC', 'GAC']
        csp is a CSP object specifying the csp problem to solve
@@ -551,7 +551,7 @@ def bt_search(algo, csp, variableHeuristic, allSolutions, trace, piece_constrain
     #     solutions = FC(uv, csp, allSolutions, trace)
     elif algo == 'GAC':
         GacEnforce(csp.constraints(), csp, None, None) #GAC at the root
-        solutions = GAC(uv, csp)
+        solutions = GAC(uv, csp, originalB)
 
     return solutions, bt_search.nodesExplored
 
@@ -628,7 +628,7 @@ def GacEnforce(cnstrs, csp, assignedvar, assignedval):
                             cnstrs.append(recheck)
     return "OK"
     
-def GAC(unAssignedVars,csp):
+def GAC(unAssignedVars,csp, originalB):
     # global i
     # print(i)
     # i+=1
@@ -653,17 +653,20 @@ def GAC(unAssignedVars,csp):
             noDWO = False
         # try printing the board
         if noDWO:
-            new_solns = GAC(unAssignedVars, csp)
+            new_solns = GAC(unAssignedVars, csp, originalB)
             if new_solns:
                 four, three, two, one, s_ = count_ship_numbers(new_solns[0], size)
                 # new_solns = [dict_to_sol(dict)]
                 # print(one, piece_constraint[0], two, piece_constraint[1], three, piece_constraint[2], four, piece_constraint[3])
                 if one == int(piece_constraint[0]) and two == int(piece_constraint[1]) and three == int(piece_constraint[2]) and four == int(piece_constraint[3]):
-                    print("three", three)
-                    print("Solution Found")
-                    solns.extend(new_solns)
-                    if len(solns) > 0:
-                        break
+                    # print("three", three)
+                    match = verify_original(originalB, s_, size)
+                    # print(match)
+                    if (match):
+                        # print("Solution Found")
+                        solns.extend(new_solns)
+                        if len(solns) > 0:
+                            break
         nxtvar.restoreValues(nxtvar,val)
     nxtvar.unAssign()
     unAssignedVars.insert(nxtvar)
@@ -674,6 +677,15 @@ def dict_to_sol(s_):
     for key in s_:
         res.append((key, s_[key]))
     return res
+
+def verify_original(originalB, s_, size):
+    for i in range(1, size-1):
+        for j in range(1, size-1):
+            sol_val = s_[(i*size+j)]
+            orig_val = originalB[i][j]
+            if orig_val!= "0" and sol_val != orig_val:
+                return False
+    return True
 
 def output_to_file(filename, sol, size):
     f = open(filename, "a")
@@ -875,6 +887,7 @@ if __name__ == "__main__":
             varlist.append(v)
             varn[str(-1-(i*size+j))] = v
 
+    originalB = board.split()[3:]
     #make 1/0 variables match board info
     ii = 0
     for i in board.split()[3:]:
@@ -937,7 +950,7 @@ if __name__ == "__main__":
     #find all solutions and check which one has right ship #'s
     csp = CSP('battleship', varlist, conslist)
     t_start = time.time()
-    solutions, num_nodes = bt_search('GAC', csp, 'mrv', False, False, piece_constraint)
+    solutions, num_nodes = bt_search('GAC', csp, 'mrv', False, False, piece_constraint, originalB)
     print(num_nodes)
     for i in range(len(solutions)):
         # output_to_file(filename=args.outputfile, sol=solutions[i])
