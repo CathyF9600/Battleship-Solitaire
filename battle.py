@@ -578,7 +578,8 @@ def BT(unAssignedVars, csp, allSolutions, trace, piece_constraint):
             if int(v._name) > 0:
                 # print("yes")
                 soln.append((v, v.getValue()))
-        # print("yes")
+        print_solution(soln, 8)
+        print("\n")
         return [soln]  #each call returns a list of solutions found
     bt_search.nodesExplored += 1
     solns = []         #so far we have no solutions recursive calls
@@ -658,6 +659,7 @@ def GAC(unAssignedVars,csp):
                 # new_solns = [dict_to_sol(dict)]
                 # print(one, piece_constraint[0], two, piece_constraint[1], three, piece_constraint[2], four, piece_constraint[3])
                 if one == int(piece_constraint[0]) and two == int(piece_constraint[1]) and three == int(piece_constraint[2]) and four == int(piece_constraint[3]):
+                    print("three", three)
                     print("Solution Found")
                     solns.extend(new_solns)
                     if len(solns) > 0:
@@ -695,7 +697,7 @@ def output_to_file(filename, sol, size):
                 # three += 1
                 s_[(i*size+j)] = "<"
                 s_[(i*size+j+1)] = "M"
-                s_[(i*size+j+1)] = ">"
+                s_[(i*size+j+2)] = ">"
             elif j < (size - 1) and s_[(i*size+j)] == "S" and s_[(i*size+j+1)] == "S":
                 # two += 1
                 s_[(i*size+j)] = "<"
@@ -728,9 +730,43 @@ def print_solution(s, size):
     s_ = {}
     for (var, val) in s:
         s_[int(var.name())] = val
+
     for i in range(1, size-1):
         for j in range(1, size-1):
-        #   print(s_[-1-(i*size+j)],end="")
+            # SSSS
+            if j < (size - 3) and s_[(i*size+j)] == "S" and s_[(i*size+j+1)] == "S" and s_[(i*size+j+2)] == "S" and s_[(i*size+j+3)] == "S":
+                # four += 1
+                s_[(i*size+j)] = "<"
+                s_[(i*size+j+1 )] ="M"
+                s_[(i*size+j+2 )] ="M"
+                s_[(i*size+j+3 )] =">"
+            elif j < (size - 2) and s_[(i*size+j)] == "S" and s_[(i*size+j+1)] == "S" and s_[(i*size+j+2)] == "S":
+                # three += 1
+                s_[(i*size+j)] = "<"
+                s_[(i*size+j+1)] = "M"
+                s_[(i*size+j+2)] = ">"
+            elif j < (size - 1) and s_[(i*size+j)] == "S" and s_[(i*size+j+1)] == "S":
+                # two += 1
+                s_[(i*size+j)] = "<"
+                s_[(i*size+j+1)] = ">"
+            if i < (size - 3) and s_[(i*size+j)] == "S" and s_[((i+1)*size+j)] == "S" and s_[((i+2)*size+j)] == "S" and s_[((i+3)*size+j)] == "S":
+                # four += 1
+                s_[((i)*size+j)] = "^"
+                s_[((i+1)*size+j)] = "M"
+                s_[((i+2)*size+j)] = "M"
+                s_[((i+3)*size+j)] = "v"
+            elif i < (size - 2) and s_[(i*size+j)] == "S" and s_[((i+1)*size+j)] == "S" and s_[((i+2)*size+j)] == "S":
+                # three += 1
+                s_[((i)*size+j)] = "^"
+                s_[((i+1)*size+j)]= "M"
+                s_[((i+2)*size+j)] = "v"
+            elif i < (size - 1) and s_[(i*size+j)] == "S" and s_[((i+1)*size+j)] == "S":
+                # two += 1
+                s_[((i)*size+j)] = "^"
+                s_[((i+1)*size+j)] = "v"
+        
+    for i in range(1, size-1):
+        for j in range(1, size-1):
             print(s_[(i*size+j)],end="")
         print('')
 
@@ -805,7 +841,7 @@ if __name__ == "__main__":
     # args = parser.parse_args()
     
     # inputfile = "/Users/yuchunfeng/Documents/CSC384/puzzle1.txt"
-    inputfile = "/Users/yuchunfeng/Documents/CSC384/A3/input_easy1.txt"
+    inputfile = "/Users/yuchunfeng/Documents/CSC384/A3/input_easy2.txt"
     outputfile = "/Users/yuchunfeng/Documents/CSC384/A3/solution999.txt"
     #parse board and ships info
     file = open(inputfile, 'r')
@@ -861,7 +897,7 @@ if __name__ == "__main__":
     col_constraint = []
     for i in board.split()[1]:
         col_constraint += [int(i)]
-    print(col_constraint)
+    # print(col_constraint)
     for col in range(0,size):
         conslist.append(NValuesConstraint('col', [varn[str(-1-(col+row*size))] for row in range(0,size)], [1], col_constraint[col], col_constraint[col]))
 
@@ -872,24 +908,36 @@ if __name__ == "__main__":
                 conslist.append(NValuesConstraint('diag', [varn[str(-1-(i*size+j))], varn[str(-1-((i-1)*size+(j-1)))]], [1], 0, 1))
                 conslist.append(NValuesConstraint('diag', [varn[str(-1-(i*size+j))], varn[str(-1-((i-1)*size+(j+1)))]], [1], 0, 1))
 
+    # # ./S/</>/v/^/M variables
+    # # these would be added to the csp as well, before searching,
+    # # along with other constraints
+    # for i in range(0, size):
+    #     for j in range(0, size):
+    #         v = Variable(str(i*size+j), ['.', 'S', '<', '^', 'v', 'M', '>'])
+    #         varlist.append(v)
+    #         varn[str(i*size+j)] = v
+    #         # connect 1/0 variables to W/S/L/R/B/T/M variables
+    #         # make positive pieces ship part when 1, not ship part when 0
+    #         conslist.append(TableConstraint('connect', [varn[str(-1-(i*size+j))], varn[str(i*size+j)]], [[0,'.'],[1,'S'],[1,'<'],[1,'^'],[1,'v'],[1,'M'],[1,'>']]))
+            
+
     # ./S/</>/v/^/M variables
     # these would be added to the csp as well, before searching,
     # along with other constraints
     for i in range(0, size):
         for j in range(0, size):
-            v = Variable(str(i*size+j), ['.', 'S', '<', '^', 'v', 'M', '>'])
+            v = Variable(str(i*size+j), ['.', 'S'])
             varlist.append(v)
             varn[str(i*size+j)] = v
             # connect 1/0 variables to W/S/L/R/B/T/M variables
             # make positive pieces ship part when 1, not ship part when 0
-            conslist.append(TableConstraint('connect', [varn[str(-1-(i*size+j))], varn[str(i*size+j)]], [[0,'.'],[1,'S'],[1,'<'],[1,'^'],[1,'v'],[1,'M'],[1,'>']]))
-            
-
+            conslist.append(TableConstraint('connect', [varn[str(-1-(i*size+j))], varn[str(i*size+j)]], [[0,'.'],[1,'S']]))
+        
 
     #find all solutions and check which one has right ship #'s
     csp = CSP('battleship', varlist, conslist)
-
-    solutions, num_nodes = bt_search('BT', csp, 'fixed', False, False, piece_constraint)
+    t_start = time.time()
+    solutions, num_nodes = bt_search('GAC', csp, 'mrv', False, False, piece_constraint)
     print(num_nodes)
     for i in range(len(solutions)):
         # output_to_file(filename=args.outputfile, sol=solutions[i])
@@ -899,4 +947,6 @@ if __name__ == "__main__":
         # if one == piece_constraint[0] and two == piece_constraint[1] and three == piece_constraint[2] and four == piece_constraint[3]:
         #     print("Solution Found")
         output_to_file(filename=outputfile, sol=solutions[i], size=size)
+        t_end = time.time()
             # break
+    print("Time:", t_end - t_start)
