@@ -709,10 +709,67 @@ def pruning_ship_numbers(solution, size):
                     s_[(i*size+j)] = "<"
                     s_[(i*size+j+1)] = ">"
             
-    # for i in range(1, size-1):
-    #     for j in range(1, size-1):
-    #         if s_[(i*size+j)] == "S":
-    #             one += 1
+    belowP = None
+    abovP = None
+    rightP = None
+    leftP = None
+    for i in range(1, size-1):
+        for j in range(1, size-1):
+            lone = False # if S is alone/surrounded by water
+            if s_[(i*size+j)] == "S":
+                if i == 1 and j == 1: # upper left corner
+                    belowP = s_[((i+1)*size+j)]
+                    rightP = s_[((i)*size+j+1)]
+                    if belowP == "." and rightP == ".":
+                        lone = True
+                elif i == 1 and j == size-2: # upper right corner
+                    belowP = s_[((i+1)*size+j)]
+                    leftP = s_[((i)*size+j-1)]
+                    if belowP == "." and leftP == ".":
+                        lone = True
+                elif i == size - 2 and j == 1: # lower left corner
+                    abovP = s_[((i-1)*size+j)]
+                    rightP = s_[((i)*size+j+1)]
+                    if abovP == "." and rightP == ".":
+                        lone = True
+                elif i == size - 2 and j == size - 2: # lower right corner
+                    abovP = s_[((i-1)*size+j)]
+                    leftP = s_[((i)*size+j-1)]
+                    if abovP == "." and leftP == ".":
+                        lone = True
+                elif i == 1: # upper border
+                    belowP = s_[((i+1)*size+j)]
+                    leftP = s_[((i)*size+j-1)]
+                    rightP = s_[((i)*size+j+1)]
+                    if belowP == "." and leftP == "." and rightP == ".":
+                        lone = True
+                elif j == 1: # left border
+                    abovP = s_[((i-1)*size+j)]
+                    belowP = s_[((i+1)*size+j)]
+                    rightP = s_[((i)*size+j+1)]
+                    if belowP == "." and rightP == "." and abovP == ".":
+                        lone = True
+                elif i == size - 2: # bottom border
+                    abovP = s_[((i-1)*size+j)]
+                    leftP = s_[((i)*size+j-1)]
+                    rightP = s_[((i)*size+j+1)]
+                    if abovP == "." and rightP == "." and leftP == ".":
+                        lone = True
+                elif j == size - 2: # right border
+                    abovP = s_[((i-1)*size+j)]
+                    leftP = s_[((i)*size+j-1)]
+                    belowP = s_[((i+1)*size+j)]
+                    if abovP == "." and leftP == "." and belowP == ".":
+                        lone = True
+                else:
+                    abovP = s_[((i-1)*size+j)]
+                    leftP = s_[((i)*size+j-1)]
+                    belowP = s_[((i+1)*size+j)]
+                    rightP = s_[((i)*size+j+1)]
+                    if abovP == "." and leftP == "." and belowP == "." and rightP == ".":
+                        lone = True
+                if lone:
+                    one += 1
     return four, three, two, one, s_
 
 def GAC(unAssignedVars,csp, originalB, piece_constraint):
