@@ -513,7 +513,7 @@ class UnassignedVars:
         else:
             self.unassigned.append(var)
 
-def bt_search(algo, csp, variableHeuristic, allSolutions, trace):
+def bt_search(algo, csp, variableHeuristic, allSolutions, trace, piece_constraint):
     '''Main interface routine for calling different forms of backtracking search
        algorithm is one of ['BT', 'FC', 'GAC']
        csp is a CSP object specifying the csp problem to solve
@@ -543,7 +543,7 @@ def bt_search(algo, csp, variableHeuristic, allSolutions, trace):
     for v in csp.variables():
         v.reset()
     if algo == 'BT':
-         solutions = BT(uv, csp, allSolutions, trace)
+         solutions = BT(uv, csp, allSolutions, trace, piece_constraint)
     elif algo == 'FC':
         for cnstr in csp.constraints():
             if cnstr.arity() == 1:
@@ -555,7 +555,7 @@ def bt_search(algo, csp, variableHeuristic, allSolutions, trace):
 
     return solutions, bt_search.nodesExplored
 
-def BT(unAssignedVars, csp, allSolutions, trace):
+def BT(unAssignedVars, csp, allSolutions, trace, piece_constraint):
     '''Backtracking Search. unAssignedVars is the current set of
        unassigned variables.  csp is the csp problem, allSolutions is
        True if you want all solutionss trace if you want some tracing
@@ -596,51 +596,86 @@ def BT(unAssignedVars, csp, allSolutions, trace):
                     if trace: pass #print "<==falsified constraint\n"
                     break
         if constraintsOK:
-            new_solns = BT(unAssignedVars, csp, allSolutions, trace)
+            # Manually check ship part constraints
+            new_solns = BT(unAssignedVars, csp, allSolutions, trace, piece_constraint) #[[sol]]
             if new_solns:
-                solns.extend(new_solns)
-            if len(solns) > 0 and not allSolutions:
-                break  #don't bother with other values of nxtvar
-                       #as we found a soln.
+                four, three, two, one, s_ = count_ship_numbers(new_solns[0], size)
+                # new_solns = [dict_to_sol(dict)]
+                # print(one, piece_constraint[0], two, piece_constraint[1], three, piece_constraint[2], four, piece_constraint[3])
+                if one == int(piece_constraint[0]) and two == int(piece_constraint[1]) and three == int(piece_constraint[2]) and four == int(piece_constraint[3]):
+                    print("Solution Found")
+                    solns.extend(new_solns)
+                    if len(solns) > 0 and not allSolutions:
+                        break  #don't bother with other values of nxtvar
+                            #as we found a soln.
     nxtvar.unAssign()
     unAssignedVars.insert(nxtvar)
     return solns
 
+def dict_to_sol(s_):
+    res = []
+    for key in s_:
+        res.append((key, s_[key]))
+    return res
+
 def output_to_file(filename, sol, size):
-    with open(filename,'r+') as file:
-        file.truncate(0)
     f = open(filename, "a")
-    # f.write("\n\nExploring:\n")
-    rows = []
-    count = 0
-    for (var,val) in sol:
-        if count == 6:
-            count = 0
-            f.write("\n")
-            
-        f.write(val) # ends with a new line
-        # f.write("\n")
-        count += 1
 
     s_ = {}
     for (var, val) in sol:
         s_[int(var.name())] = val
+
+    for i in range(1, size-1):
+        for j in range(1, size-1):
+            # SSSS
+            if j < (size - 3) and s_[(i*size+j)] == "S" and s_[(i*size+j+1)] == "S" and s_[(i*size+j+2)] == "S" and s_[(i*size+j+3)] == "S":
+                # four += 1
+                s_[(i*size+j)] = "<"
+                s_[(i*size+j+1 )] ="M"
+                s_[(i*size+j+2 )] ="M"
+                s_[(i*size+j+3 )] =">"
+            elif j < (size - 2) and s_[(i*size+j)] == "S" and s_[(i*size+j+1)] == "S" and s_[(i*size+j+2)] == "S":
+                # three += 1
+                s_[(i*size+j)] = "<"
+                s_[(i*size+j+1)] = "M"
+                s_[(i*size+j+1)] = ">"
+            elif j < (size - 1) and s_[(i*size+j)] == "S" and s_[(i*size+j+1)] == "S":
+                # two += 1
+                s_[(i*size+j)] = "<"
+                s_[(i*size+j+1)] = ">"
+            if i < (size - 3) and s_[(i*size+j)] == "S" and s_[((i+1)*size+j)] == "S" and s_[((i+2)*size+j)] == "S" and s_[((i+3)*size+j)] == "S":
+                # four += 1
+                s_[((i)*size+j)] = "^"
+                s_[((i+1)*size+j)] = "M"
+                s_[((i+2)*size+j)] = "M"
+                s_[((i+3)*size+j)] = "v"
+            elif i < (size - 2) and s_[(i*size+j)] == "S" and s_[((i+1)*size+j)] == "S" and s_[((i+2)*size+j)] == "S":
+                # three += 1
+                s_[((i)*size+j)] = "^"
+                s_[((i+1)*size+j)]= "M"
+                s_[((i+2)*size+j)] = "v"
+            elif i < (size - 1) and s_[(i*size+j)] == "S" and s_[((i+1)*size+j)] == "S":
+                # two += 1
+                s_[((i)*size+j)] = "^"
+                s_[((i+1)*size+j)] = "v"
+        
     for i in range(1, size-1):
         for j in range(1, size-1):
             f.write(s_[(i*size+j)])
-        f.write("\n")
-    f.write("\n")
+        if i != (size-2):
+            f.write("\n")
+    # f.write("\n")
     f.close()
 
 def print_solution(s, size):
-  s_ = {}
-  for (var, val) in s:
-    s_[int(var.name())] = val
-  for i in range(1, size-1):
-    for j in range(1, size-1):
-    #   print(s_[-1-(i*size+j)],end="")
-        print(s_[(i*size+j)],end="")
-    print('')
+    s_ = {}
+    for (var, val) in s:
+        s_[int(var.name())] = val
+    for i in range(1, size-1):
+        for j in range(1, size-1):
+        #   print(s_[-1-(i*size+j)],end="")
+            print(s_[(i*size+j)],end="")
+        print('')
 
 def count_ship_numbers(solution, size):
     four = 0
@@ -670,45 +705,47 @@ def count_ship_numbers(solution, size):
                 s_[(i*size+j+1)] = ">"
             if i < (size - 3) and s_[(i*size+j)] == "S" and s_[((i+1)*size+j)] == "S" and s_[((i+2)*size+j)] == "S" and s_[((i+3)*size+j)] == "S":
                 four += 1
-                s_[((i)*size+j)] == "^"
-                s_[((i+1)*size+j)] == "M"
-                s_[((i+2)*size+j)] == "M"
-                s_[((i+3)*size+j)] == "v"
+                s_[((i)*size+j)] = "^"
+                s_[((i+1)*size+j)] = "M"
+                s_[((i+2)*size+j)] = "M"
+                s_[((i+3)*size+j)] = "v"
             elif i < (size - 2) and s_[(i*size+j)] == "S" and s_[((i+1)*size+j)] == "S" and s_[((i+2)*size+j)] == "S":
                 three += 1
-                s_[((i)*size+j)] == "^"
-                s_[((i+1)*size+j)] == "M"
-                s_[((i+2)*size+j)] == "v"
+                s_[((i)*size+j)] = "^"
+                s_[((i+1)*size+j)]= "M"
+                s_[((i+2)*size+j)] = "v"
             elif i < (size - 1) and s_[(i*size+j)] == "S" and s_[((i+1)*size+j)] == "S":
                 two += 1
-                s_[((i)*size+j)] == "^"
-                s_[((i+1)*size+j)] == "v"
+                s_[((i)*size+j)] = "^"
+                s_[((i+1)*size+j)] = "v"
     for i in range(1, size-1):
         for j in range(1, size-1):
             if s_[(i*size+j)] == "S":
                 one += 1
-    return four, three, two, one
+    return four, three, two, one, s_
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--inputfile",
-        type=str,
-        required=True,
-        help="The input file that contains the puzzle."
-    )
-    parser.add_argument(
-        "--outputfile",
-        type=str,
-        required=True,
-        help="The output file that contains the solution."
-    )
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument(
+    #     "--inputfile",
+    #     type=str,
+    #     required=True,
+    #     help="The input file that contains the puzzle."
+    # )
+    # parser.add_argument(
+    #     "--outputfile",
+    #     type=str,
+    #     required=True,
+    #     help="The output file that contains the solution."
+    # )
     
-    args = parser.parse_args()
-
+    # args = parser.parse_args()
+    
+    inputfile = "puzzle1.txt"
+    outputfile = "solution1.txt"
     #parse board and ships info
-    file = open(args.inputfile, 'r')
+    file = open(inputfile, 'r')
     b = file.read()
     b2 = b.split()
     piece_constraint = b2[2]
@@ -790,14 +827,14 @@ if __name__ == "__main__":
     #find all solutions and check which one has right ship #'s
     csp = CSP('battleship', varlist, conslist)
 
-    solutions, num_nodes = bt_search('BT', csp, 'fixed', True, False)
-    # print(piece_constraint)
+    solutions, num_nodes = bt_search('BT', csp, 'fixed', False, False, piece_constraint)
+    print(num_nodes)
     for i in range(len(solutions)):
         # output_to_file(filename=args.outputfile, sol=solutions[i])
         print_solution(solutions[i], size)
         print("--------------")
-        four, three, two, one = count_ship_numbers(solutions[i], size)
-        if one == piece_constraint[0] and two == piece_constraint[1] and three == piece_constraint[2] and four == piece_constraint[3]:
-            print("Solution Found")
-            output_to_file(filename=args.outputfile, sol=solutions[i], size=size)
-            break
+        # four, three, two, one = count_ship_numbers(solutions[i], size)
+        # if one == piece_constraint[0] and two == piece_constraint[1] and three == piece_constraint[2] and four == piece_constraint[3]:
+        #     print("Solution Found")
+        output_to_file(filename=outputfile, sol=solutions[i], size=size)
+            # break
