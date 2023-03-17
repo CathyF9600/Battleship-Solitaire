@@ -27,6 +27,7 @@ class Variable:
         self._dom = list(domain)         #Make a copy of passed domain
         self._curdom = list(domain)      #using list
         self._value = None
+        self.type = None # "M", "<", ">", "S"
 
     def __str__(self):
         return "Variable {}".format(self._name)
@@ -641,7 +642,16 @@ def pruned(csp, piece_constraint):
         # print("\n")
         # print("pruned")
         return True
+    # print_solution(nsoln, size)
     return False
+
+def print_board(csp, size):
+    nsoln = []
+    for var in csp.variables():
+        if int(var._name) > 0:
+            nsoln.append((var,var.getValue()))
+    print_solution(nsoln, size)
+
     
 def pruning_ship_numbers(solution, size):
     four = 0
@@ -770,14 +780,59 @@ def pruning_ship_numbers(solution, size):
                         lone = True
                 if lone:
                     one += 1
+    
     return four, three, two, one, s_
+
+
+def pruned_unmatch(csp, size):
+    soln_m = []
+    for var in csp.variables():
+        if int(var._name) > 0:
+            soln_m.append((var,var.getValue()))
+
+    s_val = {}
+    for (var, val) in soln_m:
+        s_val[int(var.name())] = val
+    # return verify_original(originalB, s_, size)
+
+    for (i, j, ch) in givens:
+        if ch == "M":
+            if j == 1 and s_val[int(i*size+j+1)] == "S":
+                return True
+            elif i == 1 and s_val[int((i+1)*size+j)] == "S":
+                return True
+            elif j == size - 2 and s_val[int(i*size+j-1)] == "S":
+                return True
+            elif i == size - 2 and s_val[int((i-1)*size+j)] == "S":
+                return True
+        elif ch == "<" and s_val[int(i*size+j-1)] == "S":
+            return True
+        elif ch == ">" and s_val[int(i*size+j+1)] == "S":
+            return True
+        elif ch == "^" and s_val[int((i-1)*size+j)] == "S":
+            # print_board(csp, size)
+            return True
+        elif ch == "v" and s_val[int((i+1)*size+j)] == "S":
+            # print_board(csp, size)
+            return True
+    return False
+
+def match_original(originalB, s_, size):
+    for i in range(1, size-1):
+        for j in range(1, size-1):
+            sol_val = s_[(i*size+j)]
+            orig_val = originalB[i][j]
+            if orig_val != "0" and sol_val != None and sol_val != orig_val:
+                print(orig_val, sol_val)
+                return False
+    return True
 
 def GAC(unAssignedVars,csp, originalB, piece_constraint):
     # global i
     # print(i)
     # i+=1
-    if pruned(csp, piece_constraint):
-        return []
+    # if pruned(csp, piece_constraint):
+    #     return []
     if unAssignedVars.empty():
         # if trace:pass
         soln = []
@@ -795,7 +850,8 @@ def GAC(unAssignedVars,csp, originalB, piece_constraint):
         noDWO = True
         if GacEnforce(csp.constraintsOf(nxtvar), csp, nxtvar, val) == "DWO":
             noDWO = False
-        if noDWO:
+        if noDWO and not pruned(csp, piece_constraint) and not pruned_unmatch(csp, size):
+            # print_board(csp, size)
             new_solns = GAC(unAssignedVars, csp, originalB, piece_constraint)
             if new_solns:
                 # print_solution(new_solns[0], size)
@@ -984,27 +1040,27 @@ def count_ship_numbers(solution, size):
 
 
 if __name__ == "__main__":
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument(
-    #     "--inputfile",
-    #     type=str,
-    #     required=True,
-    #     help="The input file that contains the puzzle."
-    # )
-    # parser.add_argument(
-    #     "--outputfile",
-    #     type=str,
-    #     required=True,
-    #     help="The output file that contains the solution."
-    # )
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--inputfile",
+        type=str,
+        required=True,
+        help="The input file that contains the puzzle."
+    )
+    parser.add_argument(
+        "--outputfile",
+        type=str,
+        required=True,
+        help="The output file that contains the solution."
+    )
     
-    # args = parser.parse_args()
+    args = parser.parse_args()
     
     # inputfile = "/Users/yuchunfeng/Documents/CSC384/puzzle1.txt"
-    inputfile = "/Users/yuchunfeng/Documents/CSC384/A3/input_easy2.txt"
-    outputfile = "/Users/yuchunfeng/Documents/CSC384/A3/solution999.txt"
+    # inputfile = "/Users/yuchunfeng/Documents/CSC384/A3/input_easy2.txt"
+    # outputfile = "/Users/yuchunfeng/Documents/CSC384/A3/solution999.txt"
     #parse board and ships info
-    file = open(inputfile, 'r')
+    file = open(args.inputfile, 'r')
     b = file.read()
     b2 = b.split()
     piece_constraint = b2[2]
@@ -1024,6 +1080,9 @@ if __name__ == "__main__":
     varn = {}
     conslist = []
 
+    givens = []
+
+    originalB = board.split()[3:]
     #1/0 variables
     for i in range(0,size):
         for j in range(0, size):
@@ -1031,11 +1090,15 @@ if __name__ == "__main__":
             if i == 0 or i == size-1 or j == 0 or j == size-1:
                 v = Variable(str(-1-(i*size+j)), [0])
             else:
+                ch = originalB[i][j]
                 v = Variable(str(-1-(i*size+j)), [0,1])
+                if ch != "0":
+                    givens.append((i,j,ch))
+
             varlist.append(v)
             varn[str(-1-(i*size+j))] = v
 
-    originalB = board.split()[3:]
+
     #make 1/0 variables match board info
     ii = 0
     for i in board.split()[3:]:
@@ -1107,7 +1170,7 @@ if __name__ == "__main__":
         # four, three, two, one = count_ship_numbers(solutions[i], size)
         # if one == piece_constraint[0] and two == piece_constraint[1] and three == piece_constraint[2] and four == piece_constraint[3]:
         #     print("Solution Found")
-        output_to_file(filename=outputfile, sol=solutions[i], size=size)
+        output_to_file(filename=args.outputfile, sol=solutions[i], size=size)
         t_end = time.time()
             # break
     print("Time:", t_end - t_start)
